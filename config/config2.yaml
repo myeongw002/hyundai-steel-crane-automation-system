@@ -1,0 +1,93 @@
+# system.yaml
+# 현대제철 크레인 자동화 시스템 통합 설정 파일
+
+# ============================================================================
+# Socket Bridge Node 설정
+# ============================================================================
+/socket_bridge_node:
+  ros__parameters:
+    # Socket 서버 설정
+    listen_ip: '172.29.84.80'           # 수신 IP (모든 인터페이스)
+    listen_port: 2000              # 수신 포트
+    plc_ip: '172.29.84.27'        # PLC IP 주소
+    plc_port: 2000
+    buffer_size: 4096              # 버퍼 크기 (bytes)
+
+# ============================================================================
+# Inference Node 설정
+# ============================================================================
+/inference_node:
+  ros__parameters:
+    # ==================== SAM2 설정 ====================
+    sam2_root: '/home/antlab/ROS2/ros2_ws/src/hyundai_crane_automation/src/sam2'
+    sam2_config: 'configs/sam2.1/sam2.1_hiera_l.yaml'
+    sam2_checkpoint: '/home/antlab/ROS2/ros2_ws/src/hyundai_crane_automation/src/sam2/sam2.1_hiera_large.pt'
+    
+    # ==================== 카메라 캘리브레이션 ====================
+    # Camera matrix (3x3) - row-major: [fx, s, cx, 0, fy, cy, 0, 0, 1]
+    camera_matrix: [
+      1385.635672, -0.895992, 947.154907,
+      0.0, 1388.287107, 607.421636,
+      0.0, 0.0, 1.0
+    ]
+    
+    # Distortion coefficients [k1, k2, p1, p2, k3]
+    dist_coeffs: [-0.085307, 0.079377, 0.000436, -0.000662, 0.0]
+    
+    # LiDAR to Camera transformation (4x4) - row-major
+    t_lidar_to_cam: [
+      0.0129229, -0.999916, -0.000756324, -0.121755,
+      -0.0144186, 0.000569792, -0.999896, 0.010138,
+      0.999813, 0.0129326, -0.0144102, -0.148907,
+      0.0, 0.0, 0.0, 1.0
+    ]
+    
+    # ==================== 프롬프트 설정 ====================
+    # 객체 1 (마그네트) - [x1, y1, x2, y2]
+    obj1_points: [1010, 460, 1010, 714]
+    obj1_labels: [1, 1]
+    
+    # 객체 2 (철판) - [x1, y1, x2, y2]
+    obj2_points: [837, 424, 837, 766, 260, 590, 1118, 574, 1170, 804, 1119, 327, 607, 892]
+    obj2_labels: [1, 1, 0, 0, 0, 0, 0]
+    
+    # ==================== 측정 설정 ====================
+    confidence_threshold: 0.8
+    processing_timeout: 30.0
+    use_lidar: true
+    use_camera: true
+    output_dir: '/home/antlab/sam2_results'
+    save_data: true
+    visualize: true
+    
+    # ==================== FTP 업로드 설정 ====================
+    ftp_enabled: false
+    ftp_host: '172.29.73.49'
+    ftp_username: 'plateftp'
+    ftp_password: 'plateftp'
+    ftp_remote_dir: 'upload/4'
+    
+    # ==================== main.py 통합 파라미터 ====================
+    one_shot_image: '/home/myungw00/ROS2/crane_ws/src/hyundai_crane_automation/src/oneshot'
+    morph_kernel_size: 40
+    measurement_offset_px: 700
+    measurement_offset_p1_p2: 19.4
+    measurement_offset_p3_p4: 19.4
+    measurement_offset_p5_p6: 32.4
+    measurement_offset_p7_p8: 32.4
+    lidar_dense: false
+    enable_fov_crop: true
+    fov_degrees: 120
+    enable_plane_refinement: true
+    plane_ransac_iterations: 100
+    plane_threshold: 0.05
+    
+    # ==================== 센서 토픽 ====================
+    camera_topic: '/camera/image_raw/compressed'
+    lidar_topic: '/lidar/points'
+    sensor_buffer_size: 10
+    sensor_timeout: 5.0
+    
+    # ==================== 센서 동기화 ====================
+    sync_queue_size: 10
+    sync_slop: 0.1
