@@ -24,12 +24,12 @@ ACWL_LIDAR_USE   = slice(79, 80)   # 1
 ACWL_CAMERA_USE  = slice(80, 81)   # 1
 
 # WLAC0001 body slices (absolute)
-WLAC_EQP_CD      = slice(31, 37)
-WLAC_RESULT_CODE = slice(37, 41)
-WLAC_LEN_RESULT_P1_P2  = slice(41, 45)
-WLAC_LEN_RESULT_P3_P4  = slice(45, 49)
-WLAC_WIDTH_RESULT_P5_P6 = slice(49, 53)
-WLAC_WIDTH_RESULT_P7_P8 = slice(53, 57)
+WLAC_EQP_CD      = slice(31, 37)   # 6
+WLAC_RESULT_CODE = slice(37, 41)   # 4
+WLAC_LEN_RESULT_P1_P2  = slice(41, 46)   # 5 (부호 포함)
+WLAC_LEN_RESULT_P3_P4  = slice(46, 51)   # 5 (부호 포함)
+WLAC_WIDTH_RESULT_P5_P6 = slice(51, 56)  # 5 (부호 포함)
+WLAC_WIDTH_RESULT_P7_P8 = slice(56, 61)  # 5 (부호 포함)
 
 def _ascii_strip(b: bytes) -> str:
     return b.decode('ascii', errors='ignore').rstrip()
