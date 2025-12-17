@@ -1,0 +1,8 @@
+#request
+hyundai_steel_crane_automation_system/HeadCR head
+hyundai_steel_crane_automation_system/WLAC0001Body body
+---
+#response
+bool stored
+string error
+
