@@ -410,13 +410,13 @@ class InferenceNode2(Node):
                 error_msg = str(e).lower()
                 if 'camera' in error_msg:
                     self.get_logger().error(f'❌ Camera error: {e}')
-                    error_result = {'result_code': '0010', 'length': 0, 'width': 0}
+                    error_result = {'result_code': '0010', 'len_p1_2': 0, 'len_p3_4': 0, 'width_p5_6': 0, 'width_p7_8': 0}
                 elif 'lidar' in error_msg:
                     self.get_logger().error(f'❌ LiDAR error: {e}')
-                    error_result = {'result_code': '0020', 'length': 0, 'width': 0}
+                    error_result = {'result_code': '0020', 'len_p1_2': 0, 'len_p3_4': 0, 'width_p5_6': 0, 'width_p7_8': 0}
                 else:
                     self.get_logger().error(f'❌ Sensor data collection failed: {e}')
-                    error_result = {'result_code': '0030', 'length': 0, 'width': 0}
+                    error_result = {'result_code': '0030', 'len_p1_2': 0, 'len_p3_4': 0, 'width_p5_6': 0, 'width_p7_8': 0}
                 raise
             
             frame_count = len(sensor_data_list)
@@ -467,8 +467,10 @@ class InferenceNode2(Node):
             # 6. 결과 검증 및 포맷팅
             result = {
                 'result_code': '0000',
-                'length': int(avg_measurements.get('P1-P2', 0)),  # 또는 P3-P4
-                'width': int(avg_measurements.get('P5-P6', 0)),   # 또는 P7-P8
+                'len_p1_2': int(avg_measurements.get('P1-P2', 0)),
+                'len_p3_4': int(avg_measurements.get('P3-P4', 0)),
+                'width_p5_6': int(avg_measurements.get('P5-P6', 0)),
+                'width_p7_8': int(avg_measurements.get('P7-P8', 0)),
                 'p1_p2': avg_measurements.get('P1-P2', 0.0) / 1000.0,  # m 단위로 저장
                 'p3_p4': avg_measurements.get('P3-P4', 0.0) / 1000.0,
                 'p5_p6': avg_measurements.get('P5-P6', 0.0) / 1000.0,
@@ -512,7 +514,7 @@ class InferenceNode2(Node):
             self.get_logger().error(traceback.format_exc())
             
             if error_result is None:
-                error_result = {'result_code': '0030', 'length': 0, 'width': 0}
+                error_result = {'result_code': '0030', 'len_p1_2': 0, 'len_p3_4': 0, 'width_p5_6': 0, 'width_p7_8': 0}
             
             try:
                 self._send_result_to_plc(error_result, request)
@@ -751,8 +753,10 @@ class InferenceNode2(Node):
         wlac_request.body = WLAC0001Body()
         wlac_request.body.eqp_cd = original_request.body.eqp_cd
         wlac_request.body.result_code = result['result_code']
-        wlac_request.body.len_result_mm = result['length']
-        wlac_request.body.width_result_mm = result['width']
+        wlac_request.body.len_result_p1_2 = result['len_p1_2']
+        wlac_request.body.len_result_p3_4 = result['len_p3_4']
+        wlac_request.body.width_result_p5_6 = result['width_p5_6']
+        wlac_request.body.width_result_p7_8 = result['width_p7_8']
         
         now = time.time()
         wlac_request.body.stamp = Time()

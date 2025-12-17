@@ -7,9 +7,9 @@
 /socket_bridge_node:
   ros__parameters:
     # Socket 서버 설정
-    listen_ip: '172.29.84.80'           # 수신 IP (모든 인터페이스)
+    listen_ip: '172.29.84.79'           # 수신 IP (모든 인터페이스)
     listen_port: 2000              # 수신 포트
-    plc_ip: '172.29.84.27'        # PLC IP 주소
+    plc_ip: '172.29.84.26'        # PLC IP 주소
     plc_port: 2000
     buffer_size: 4096              # 버퍼 크기 (bytes)
 

@@ -110,12 +110,14 @@ class DataLogger:
             
             # Body 정보
             f.write('[BODY]\n')
-            f.write(f'  eqp_cd        : {wlac_request_data["body"]["eqp_cd"]}\n')
-            f.write(f'  result_code   : {wlac_request_data["body"]["result_code"]}\n')
-            f.write(f'  len_result_mm : {wlac_request_data["body"]["len_result_mm"]} mm\n')
-            f.write(f'  width_result_mm: {wlac_request_data["body"]["width_result_mm"]} mm\n')
-            f.write(f'  stamp.sec     : {wlac_request_data["body"]["stamp"]["sec"]}\n')
-            f.write(f'  stamp.nanosec : {wlac_request_data["body"]["stamp"]["nanosec"]}\n\n')
+            f.write(f'  eqp_cd           : {wlac_request_data["body"]["eqp_cd"]}\n')
+            f.write(f'  result_code      : {wlac_request_data["body"]["result_code"]}\n')
+            f.write(f'  len_result_p1_2  : {wlac_request_data["body"]["len_result_p1_2"]} mm\n')
+            f.write(f'  len_result_p3_4  : {wlac_request_data["body"]["len_result_p3_4"]} mm\n')
+            f.write(f'  width_result_p5_6: {wlac_request_data["body"]["width_result_p5_6"]} mm\n')
+            f.write(f'  width_result_p7_8: {wlac_request_data["body"]["width_result_p7_8"]} mm\n')
+            f.write(f'  stamp.sec        : {wlac_request_data["body"]["stamp"]["sec"]}\n')
+            f.write(f'  stamp.nanosec    : {wlac_request_data["body"]["stamp"]["nanosec"]}\n\n')
             
             f.write('-' * 80 + '\n')
             f.write('WLAC0001 RESPONSE DATA\n')
@@ -300,8 +302,10 @@ def convert_wlac_request_to_dict(ros_wlac_request) -> dict:
         'body': {
             'eqp_cd': ros_wlac_request.body.eqp_cd,
             'result_code': ros_wlac_request.body.result_code,
-            'len_result_mm': ros_wlac_request.body.len_result_mm,
-            'width_result_mm': ros_wlac_request.body.width_result_mm,
+            'len_result_p1_2': ros_wlac_request.body.len_result_p1_2,
+            'len_result_p3_4': ros_wlac_request.body.len_result_p3_4,
+            'width_result_p5_6': ros_wlac_request.body.width_result_p5_6,
+            'width_result_p7_8': ros_wlac_request.body.width_result_p7_8,
             'stamp': {
                 'sec': ros_wlac_request.body.stamp.sec,
                 'nanosec': ros_wlac_request.body.stamp.nanosec

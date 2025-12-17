@@ -36,10 +36,10 @@
     
     # LiDAR to Camera transformation (4x4) - row-major
     t_lidar_to_cam: [
-      0.0129229, -0.999916, -0.000756324, -0.121755,
-      -0.0144186, 0.000569792, -0.999896, 0.010138,
-      0.999813, 0.0129326, -0.0144102, -0.148907,
-      0.0, 0.0, 0.0, 1.0
+      -0.00653291,-0.99997115,0.00389871,0.07154691,
+      -0.00335261,-0.00387704,-0.99998701,-0.04361968,
+      0.99997318,-0.00654575,-0.00332737,0.00185551,
+      0.00000000,0.00000000,0.00000000,1.00000000
     ]
     
     # ==================== 프롬프트 설정 ====================
@@ -68,7 +68,7 @@
     ftp_remote_dir: 'upload/4'
     
     # ==================== main.py 통합 파라미터 ====================
-    one_shot_image: '/home/myungw00/ROS2/crane_ws/src/hyundai_crane_automation/src/oneshot'
+    one_shot_image: '/home/antlab/ROS2/crane_ws/src/hyundai_crane_automation/src/oneshot'
     morph_kernel_size: 40
     measurement_offset_px: 700
     measurement_offset_p1_p2: 19.4
