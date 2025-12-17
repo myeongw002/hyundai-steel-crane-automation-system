@@ -221,10 +221,10 @@ class SocketBridgeNode(Node):
                     header = bytearray(packet + b' ' * (40 - len(packet)))
                 
                 # msg_len을 '0060'으로 수정 (27~30 인덱스, 4글자)
-                header[27:31] = b'0060'
+                header[27:31] = b'0070'
                 
-                # 60바이트 맞추기: header(40) + ARK(3) + 공백(17) = 60
-                response = bytes(header) + b'ARK' + b' ' * 17
+                # 70바이트 맞추기: header(40) + ARK(3) + 공백(27) = 70
+                response = bytes(header) + b'ARK' + b' ' * 27
                 
                 client_sock.send(response)
                 self.get_logger().info(f'Sent ARK response: {len(response)} bytes')
