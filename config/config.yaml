@@ -52,8 +52,6 @@
     obj2_labels: [1, 1, 0, 0, 0, 0, 0]
     
     # ==================== 측정 설정 ====================
-    confidence_threshold: 0.8
-    processing_timeout: 30.0
     use_lidar: true
     use_camera: true
     output_dir: '/home/antlab/sam2_results'
