@@ -7,9 +7,9 @@
 /socket_bridge_node:
   ros__parameters:
     # Socket 서버 설정
-    listen_ip: '172.29.84.80'           # 수신 IP (모든 인터페이스)
+    listen_ip: '172.29.84.79'           # 수신 IP (모든 인터페이스)
     listen_port: 2000              # 수신 포트
-    plc_ip: '172.29.84.27'        # PLC IP 주소
+    plc_ip: '172.29.84.26'        # PLC IP 주소
     plc_port: 2000
     buffer_size: 4096              # 버퍼 크기 (bytes)
 
@@ -61,14 +61,14 @@
     visualize: true
     
     # ==================== FTP 업로드 설정 ====================
-    ftp_enabled: false
+    ftp_enabled: true
     ftp_host: '172.29.73.49'
     ftp_username: 'plateftp'
     ftp_password: 'plateftp'
-    ftp_remote_dir: 'upload/4'
+    ftp_remote_dir: 'upload/3'
     
     # ==================== main.py 통합 파라미터 ====================
-    one_shot_image: '/home/myungw00/ROS2/crane_ws/src/hyundai_crane_automation/src/oneshot'
+    one_shot_image: '/home/antlab/ROS2/crane_ws/src/hyundai_crane_automation/oneshot'
     morph_kernel_size: 40
     measurement_offset_px: 700
     measurement_offset_p1_p2: 19.4
@@ -89,5 +89,5 @@
     sensor_timeout: 5.0
     
     # ==================== 센서 동기화 ====================
-    sync_queue_size: 10
-    sync_slop: 0.1
+    sync_queue_size: 2
+    sync_slop: 0.05

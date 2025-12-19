@@ -1,10 +1,9 @@
 import os
 import sys
 import traceback
-import yaml
+import argparse
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from data_loader import DataLoader
 from sam2_wrapper import SAM2Wrapper
 from utils import *
@@ -12,59 +11,49 @@ from visualizer import *
 import shutil
 
 class Config:
-    """Configuration class that loads parameters from YAML file"""
+    # --- System & Paths ---
+    VIDEO_DIR = "../hyundai-steel/data/202511270905601478/image/"
+    PCD_DIR = "../hyundai-steel/data/202511270905601478/pcd/"
     
-    @classmethod
-    def load_from_yaml(cls, config_path="params/config.yaml"):
-        """Load configuration from YAML file"""
-        # Get absolute path relative to script location
-        script_dir = Path(__file__).parent.parent
-        config_file = script_dir / config_path
-        
-        if not config_file.exists():
-            raise FileNotFoundError(f"Config file not found: {config_file}")
-        
-        with open(config_file, 'r', encoding='utf-8') as f:
-            config_data = yaml.safe_load(f)
-        
-        # System & Paths
-        cls.VIDEO_DIR = config_data.get('video_dir', '')
-        cls.PCD_DIR = config_data.get('pcd_dir', '')
-        cls.ONE_SHOT_IMAGE = config_data.get('one_shot_image', '')
-        
-        # Prompt points and labels
-        cls.magnet_pts = np.array(config_data.get('magnet_pts', []), dtype=np.float32)
-        cls.magnet_lbl = np.array(config_data.get('magnet_lbl', []), dtype=np.int32)
-        cls.plate_pts = np.array(config_data.get('plate_pts', []), dtype=np.float32)
-        cls.plate_lbl = np.array(config_data.get('plate_lbl', []), dtype=np.int32)
-        
-        # Measurement offsets
-        cls.MEASUREMENT_OFFSET = config_data.get('measurement_offset', {})
-        
-        # SAM2 Configuration
-        cls.SAM2_ROOT = config_data.get('sam2_root', 'sam2')
-        if cls.SAM2_ROOT not in sys.path:
-            sys.path.insert(0, cls.SAM2_ROOT)
-        cls.SAM2_CHECKPOINT = config_data.get('sam2_checkpoint', '')
-        cls.SAM2_CONFIG = config_data.get('sam2_config', '')
-        
-        # Camera parameters
-        cls.CAMERA_MATRIX = np.array(config_data.get('camera_matrix', []), dtype=np.float64)
-        cls.DIST_COEFFS = np.array(config_data.get('dist_coeffs', []), dtype=np.float64)
-        cls.T_LIDAR_TO_CAM = np.array(config_data.get('t_lidar_to_cam', []), dtype=np.float64)
-        
-        # Processing parameters
-        cls.MORPH_OPEN_KERNEL_SIZE = config_data.get('morph_open_kernel_size', 40)
-        cls.MEASUREMENT_POSITION_OFFSET = config_data.get('measurement_position_offset', 700)
-        
-        # LiDAR configuration
-        cls.LIDAR_DENSE = config_data.get('lidar_dense', False)
-        
-        # Visualization & Output
-        cls.VISUALIZE = config_data.get('visualize', True)
-        cls.OUTPUT_DIR = config_data.get('output_dir', 'outputs')
-        
-        return cls
+    ONE_SHOT_IMAGE = "../hyundai-steel/data/202511271034602746/image/0002.jpg"
+    magnet_pts = np.array([[1010, 460], [1010, 714]], dtype=np.float32)
+    magnet_lbl = np.array([1, 1], np.int32)
+    plate_pts = np.array([[837, 424], [837, 766], [260, 590], [1118, 574], [1170, 804], [1119,327], [607, 892]], dtype=np.float32)
+    plate_lbl = np.array([1, 1, 0, 0, 0, 0, 0], np.int32)
+    
+    MEASUREMENT_OFFSET = { # 크레인 높이 값에 맞춰 변경시켜줘야 됨
+        'P1-P2': 19.4,   # 위쪽 길이 offset
+        'P3-P4': 19.4,   # 아래쪽 길이 offset
+        'P5-P6': 32.4,   # 위쪽 너비 offset
+        'P7-P8': 32.4    # 아래쪽 너비 offset
+    }
+    
+    SAM2_ROOT = "sam2"
+    if SAM2_ROOT not in sys.path:
+        sys.path.insert(0, SAM2_ROOT)
+    SAM2_CHECKPOINT = "checkpoints/sam2.1_hiera_large.pt"
+    SAM2_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
+
+    CAMERA_MATRIX = np.array([
+        [1385.635672,    -0.895992,   947.154907],
+        [   0.  ,     1388.287107,  607.421636],
+        [   0.  ,        0.      ,    1.      ]
+    ])
+    DIST_COEFFS = np.array([-0.085307, 0.079377, 0.000436, -0.000662, 0.0])
+    T_LIDAR_TO_CAM = np.array([
+        [0.0129229, -0.999916, -0.000756324, -0.121755],
+        [-0.0144186, 0.000569792, -0.999896, 0.010138],
+        [0.999813, 0.0129326, -0.0144102, -0.148907],
+        [0,0,0,1]
+    ])
+
+    MORPH_OPEN_KERNEL_SIZE = 40
+    MEASUREMENT_POSITION_OFFSET = 700
+    
+    LIDAR_DENSE = False
+    
+    VISUALIZE = True
+    OUTPUT_DIR = "outputs"
 
 class Pipeline:
     def __init__(self):
@@ -247,20 +236,46 @@ class Pipeline:
             output_path=output_path
         )
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Run measurement pipeline with configurable parameters')
+    
+    # 데이터 경로
+    parser.add_argument('--video-dir', type=str, default=None, help='Video directory path')
+    parser.add_argument('--pcd-dir', type=str, default=None, help='Point cloud directory path')
+    parser.add_argument('--plate-dir', type=str, default=None, help='Plate results directory path')
+    
+    # 파라미터
+    parser.add_argument('--kernel-size', type=int, default=None, help='Morphological opening kernel size')
+    parser.add_argument('--offset', type=int, default=None, help='Measurement offset in mm')
+    
+    # 출력
+    parser.add_argument('--output-dir', type=str, default=None, help='Output directory path')
+    parser.add_argument('--visualize', action='store_true', help='Enable visualization')
+    parser.add_argument('--exp-name', type=str, default=None, help='Experiment name for output directory')
+    
+    return parser.parse_args()
+
+def apply_args_to_config(args):
+    """Apply command-line arguments to Config class"""
+    if args.video_dir:
+        Config.VIDEO_DIR = args.video_dir
+    if args.pcd_dir:
+        Config.PCD_DIR = args.pcd_dir
+    if args.plate_dir:
+        Config.PLATE_DIR = args.plate_dir
+    if args.kernel_size:
+        Config.MORPH_OPEN_KERNEL_SIZE = args.kernel_size
+    if args.offset:
+        Config.MEASUREMENT_POSITION_OFFSET = args.offset
+    if args.visualize:
+        Config.VISUALIZE = True
+    if args.output_dir:
+        Config.OUTPUT_DIR = args.output_dir
+    elif args.exp_name:
+        Config.OUTPUT_DIR = f"outputs/{args.exp_name}"
+
 if __name__ == "__main__":
-    import sys
-    
-    # Load configuration from YAML file
-    config_path = "params/config.yaml"
-    
-    # Allow optional config path as command line argument
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-    
-    # Load configuration
-    Config.load_from_yaml(config_path)
-    print(f"Configuration loaded from: {config_path}")
-    
-    # Run pipeline
+    args = parse_args()
+    apply_args_to_config(args)
     pipeline = Pipeline()
     pipeline.run()

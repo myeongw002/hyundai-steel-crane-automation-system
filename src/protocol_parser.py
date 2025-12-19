@@ -24,10 +24,12 @@ ACWL_LIDAR_USE   = slice(79, 80)   # 1
 ACWL_CAMERA_USE  = slice(80, 81)   # 1
 
 # WLAC0001 body slices (absolute)
-WLAC_EQP_CD      = slice(31, 37)
-WLAC_RESULT_CODE = slice(37, 41)
-WLAC_LEN_RESULT  = slice(41, 45)
-WLAC_WIDTH_RESULT = slice(45, 50)
+WLAC_EQP_CD      = slice(31, 37)   # 6
+WLAC_RESULT_CODE = slice(37, 41)   # 4
+WLAC_LEN_RESULT_P1_P2  = slice(41, 46)   # 5 (부호 포함)
+WLAC_LEN_RESULT_P3_P4  = slice(46, 51)   # 5 (부호 포함)
+WLAC_WIDTH_RESULT_P5_P6 = slice(51, 56)  # 5 (부호 포함)
+WLAC_WIDTH_RESULT_P7_P8 = slice(56, 61)  # 5 (부호 포함)
 
 def _ascii_strip(b: bytes) -> str:
     return b.decode('ascii', errors='ignore').rstrip()
@@ -102,8 +104,10 @@ class ProtocolParser:
         b = WLAC0001Body()
         b.eqp_cd = _ascii_strip(data[WLAC_EQP_CD])
         b.result_code = _ascii_strip(data[WLAC_RESULT_CODE])
-        b.len_result_mm = _ascii_int(data[WLAC_LEN_RESULT], 0)
-        b.width_result_mm = _ascii_int(data[WLAC_WIDTH_RESULT], 0)
+        b.len_result_p1_2 = _ascii_int(data[WLAC_LEN_RESULT_P1_P2], 0)
+        b.len_result_p3_4 = _ascii_int(data[WLAC_LEN_RESULT_P3_P4], 0)
+        b.width_result_p5_6 = _ascii_int(data[WLAC_WIDTH_RESULT_P5_P6], 0)
+        b.width_result_p7_8 = _ascii_int(data[WLAC_WIDTH_RESULT_P7_P8], 0)
         req.body = b
         return req
 
@@ -133,23 +137,37 @@ class ProtocolParser:
         msg.extend(body.eqp_cd.ljust(6).encode('ascii'))
         msg.extend(body.result_code.ljust(4).encode('ascii'))
         
-        # length result: 부호(+/-) + 4자리 숫자 = 총 5자리
-        # ex: +0029, -0100
-        l = body.len_result_mm
-        if isinstance(l, int):
-            ltxt = f"{l:+05d}"  # 부호 포함 5자리 (ex: +0029, -0100)
+        # length result P1-P2: 부호 포함 5자리 숫자
+        l1 = body.len_result_p1_2
+        if isinstance(l1, int):
+            l1txt = f"{l1:+05d}"  # 부호 포함 5자리
         else:
-            ltxt = str(l).rjust(5)
-        msg.extend(ltxt.encode('ascii'))
+            l1txt = str(l1).rjust(5)
+        msg.extend(l1txt.encode('ascii'))
         
-        # width result: 부호(+/-) + 4자리 숫자 = 총 5자리
-        # ex: +0029, -0100
-        w = body.width_result_mm
-        if isinstance(w, int):
-            wtxt = f"{w:+05d}"  # 부호 포함 5자리 (ex: +0029, -0100)
+        # length result P3-P4: 부호 포함 5자리 숫자
+        l2 = body.len_result_p3_4
+        if isinstance(l2, int):
+            l2txt = f"{l2:+05d}"  # 부호 포함 5자리
         else:
-            wtxt = str(w).rjust(5)
-        msg.extend(wtxt.encode('ascii'))
+            l2txt = str(l2).rjust(5)
+        msg.extend(l2txt.encode('ascii'))
+        
+        # width result P5-P6: 부호 포함 5자리 숫자
+        w1 = body.width_result_p5_6
+        if isinstance(w1, int):
+            w1txt = f"{w1:+05d}"  # 부호 포함 5자리
+        else:
+            w1txt = str(w1).rjust(5)
+        msg.extend(w1txt.encode('ascii'))
+        
+        # width result P7-P8: 부호 포함 5자리 숫자
+        w2 = body.width_result_p7_8
+        if isinstance(w2, int):
+            w2txt = f"{w2:+05d}"  # 부호 포함 5자리
+        else:
+            w2txt = str(w2).rjust(5)
+        msg.extend(w2txt.encode('ascii'))
 
         # finalize length
         total_len = len(msg)
