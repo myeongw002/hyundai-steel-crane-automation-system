@@ -166,8 +166,6 @@ class InferenceNode2(Node):
         self.declare_parameter('obj2_labels', [1, 1])
         
         # 측정 설정
-        self.declare_parameter('confidence_threshold', 0.8)
-        self.declare_parameter('processing_timeout', 30.0)
         self.declare_parameter('use_lidar', True)
         self.declare_parameter('use_camera', True)
         self.declare_parameter('output_dir', '/tmp/sam2_results')
