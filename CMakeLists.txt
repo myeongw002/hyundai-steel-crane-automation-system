@@ -21,6 +21,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 install(
   PROGRAMS
+    src/acwl_client.py
     src/data_loader.py
     src/data_logger.py
     src/ftp_uploader.py
