@@ -77,7 +77,7 @@
     enable_fov_crop: true
     fov_degrees: 120
     lidar_vertical: 128
-    lidar_horizontal: 512
+    lidar_horizontal: 2048
     lidar_upsample_scale: 3
     plane_ransac_iterations: 700
     plane_threshold: 0.003
@@ -85,7 +85,7 @@
     # ==================== 센서 토픽 ====================
     camera_topic: '/flir_camera/image_colored/compressed'
     lidar_topic: '/ouster/points'
-    sensor_buffer_size: 4
+    sensor_buffer_size: 3
     sensor_timeout: 5.0
     
     # ==================== 센서 동기화 ====================
