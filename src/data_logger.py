@@ -6,6 +6,9 @@ Provides functionality to save ACWL/WLAC protocol data and measurement results
 import csv
 import os
 import time
+import cv2
+import numpy as np
+from pathlib import Path
 from typing import List, Dict, Optional
 
 
@@ -221,6 +224,112 @@ class DataLogger:
         )
         
         return paths
+    
+    def save_visualizations(self, image, masks, magnet_mask, plate_mask,
+                           magnet_corners_2d, plate_corners_2d,
+                           measure_points_3d, measurements, camera_matrix, dist_coeffs,
+                           frame_idx: int, sequence_id: str = ''):
+        """
+        4종 시각화 결과 저장
+        
+        Args:
+            image: 원본 이미지 (RGB)
+            masks: SAM2 마스크 딕셔너리
+            magnet_mask: 정제된 자석 마스크
+            plate_mask: 정제된 판재 마스크
+            magnet_corners_2d: 자석 코너 2D 좌표
+            plate_corners_2d: 판재 코너 2D 좌표
+            measure_points_3d: 측정 포인트 3D 좌표
+            measurements: 측정 결과 딕셔너리
+            camera_matrix: 카메라 매트릭스
+            dist_coeffs: 왜곡 계수
+            frame_idx: 프레임 인덱스
+            sequence_id: 시퀀스 ID
+        """
+        from visualizer import (
+            sam2_visualizer, mask_visualizer,
+            box_visualizer, measurement_visualizer
+        )
+        
+        # 출력 디렉토리 설정
+        if sequence_id:
+            output_dir = Path(self.output_dir) / sequence_id / "results"
+        else:
+            output_dir = Path(self.output_dir)
+        output_dir.mkdir(exist_ok=True, parents=True)
+        
+        frame_id = f"frame_{frame_idx:04d}"
+        
+        # 1. SAM2 segmentation 결과
+        sam2_visualizer(image.copy(), masks, frame_id, output_dir)
+        
+        # 2. Mask 정제 결과
+        mask_visualizer(image.copy(), [magnet_mask, plate_mask], frame_id, output_dir)
+        
+        # 3. Box 결과
+        box_visualizer(image.copy(), [magnet_corners_2d, plate_corners_2d], frame_id, output_dir)
+        
+        # 4. 측정 결과
+        measurement_visualizer(
+            image.copy(), [magnet_corners_2d, plate_corners_2d],
+            measure_points_3d, camera_matrix, dist_coeffs,
+            measurements, frame_id, output_dir
+        )
+    
+    def save_sensor_data(self, sensor_data_list: list, sequence_id: str = ''):
+        """
+        센서 데이터를 디스크에 저장 (이미지 + 포인트클라우드)
+        
+        Args:
+            sensor_data_list: 센서 데이터 리스트 (각 요소는 'camera', 'lidar' 키를 가진 dict)
+            sequence_id: 시퀀스 ID
+        """
+        base_dir = self._get_base_dir(sequence_id)
+        image_dir = os.path.join(base_dir, 'image')
+        pcd_dir = os.path.join(base_dir, 'pcd')
+        
+        os.makedirs(image_dir, exist_ok=True)
+        os.makedirs(pcd_dir, exist_ok=True)
+        
+        for idx, sensor_data in enumerate(sensor_data_list):
+            try:
+                if 'camera' in sensor_data and sensor_data['camera'] is not None:
+                    image_path = os.path.join(image_dir, f'{idx:04d}.jpg')
+                    bgr_image = cv2.cvtColor(sensor_data['camera'], cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(image_path, bgr_image)
+                
+                if 'lidar' in sensor_data and sensor_data['lidar'] is not None:
+                    pcd_path = os.path.join(pcd_dir, f'{idx:04d}.pcd')
+                    self._save_pcd(sensor_data['lidar'], pcd_path)
+            except Exception as e:
+                # 개별 프레임 저장 실패는 무시하고 계속 진행
+                pass
+    
+    def _save_pcd(self, points: np.ndarray, filepath: str):
+        """
+        포인트 클라우드를 PCD 파일로 저장 (ASCII 형식)
+        
+        Args:
+            points: Nx3 numpy 배열
+            filepath: 저장할 PCD 파일 경로
+        """
+        num_points = points.shape[0]
+        
+        with open(filepath, 'w') as f:
+            f.write('# .PCD v0.7 - Point Cloud Data file format\n')
+            f.write('VERSION 0.7\n')
+            f.write('FIELDS x y z\n')
+            f.write('SIZE 4 4 4\n')
+            f.write('TYPE F F F\n')
+            f.write('COUNT 1 1 1\n')
+            f.write(f'WIDTH {num_points}\n')
+            f.write('HEIGHT 1\n')
+            f.write('VIEWPOINT 0 0 0 1 0 0 0\n')
+            f.write(f'POINTS {num_points}\n')
+            f.write('DATA ascii\n')
+            
+            for point in points:
+                f.write(f'{point[0]:.6f} {point[1]:.6f} {point[2]:.6f}\n')
     
     def _get_base_dir(self, sequence_id: str = '') -> str:
         """

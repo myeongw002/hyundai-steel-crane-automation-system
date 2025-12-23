@@ -174,3 +174,78 @@ class ProtocolParser:
         # write length into the reserved 4-byte spot
         msg[msg_len_index:msg_len_index+4] = f"{total_len:04d}".encode('ascii')
         return bytes(msg)
+
+
+def send_result_to_plc(wlac_client, result: dict, original_request, 
+                       logger=None, timeout_sec: float = 10.0):
+    """
+    PLC로 측정 결과 전송 (WLAC0001)
+    
+    Args:
+        wlac_client: ROS2 WLAC0001 서비스 클라이언트
+        result: 측정 결과 딕셔너리 (result_code, len_p1_2, len_p3_4, width_p5_6, width_p7_8)
+        original_request: 원본 ACWL0001 요청 (eqp_cd 추출용)
+        logger: 로거 (옵션)
+        timeout_sec: 타임아웃 시간 (기본 10초)
+    
+    Returns:
+        (wlac_request_dict, wlac_response_dict) 튜플
+    
+    Raises:
+        Exception: WLAC0001 서비스가 없거나 PLC가 거부한 경우
+        TimeoutError: 응답 타임아웃
+    """
+    from data_logger import convert_wlac_request_to_dict, convert_wlac_response_to_dict
+    
+    # WLAC 요청 메시지 생성
+    wlac_request = WLAC0001.Request()
+    
+    wlac_request.head = HeadCR()
+    wlac_request.head.msg_id = 'WLAC0001'
+    wlac_request.head.date = time.strftime('%Y-%m-%d')
+    wlac_request.head.time = time.strftime('%H-%M-%S')
+    wlac_request.head.form = 'I'
+    wlac_request.head.msg_len = 60
+    wlac_request.head.filler = ''
+    
+    wlac_request.body = WLAC0001Body()
+    wlac_request.body.eqp_cd = original_request.body.eqp_cd
+    wlac_request.body.result_code = result['result_code']
+    wlac_request.body.len_result_p1_2 = result['len_p1_2']
+    wlac_request.body.len_result_p3_4 = result['len_p3_4']
+    wlac_request.body.width_result_p5_6 = result['width_p5_6']
+    wlac_request.body.width_result_p7_8 = result['width_p7_8']
+    
+    now = time.time()
+    wlac_request.body.stamp = Time()
+    wlac_request.body.stamp.sec = int(now)
+    wlac_request.body.stamp.nanosec = int((now % 1) * 1e9)
+    
+    # 서비스 대기
+    if not wlac_client.wait_for_service(timeout_sec=5.0):
+        raise Exception('WLAC0001 service not available')
+    
+    # 비동기 호출
+    future = wlac_client.call_async(wlac_request)
+    
+    # 응답 대기
+    timeout_start = time.time()
+    while not future.done():
+        if time.time() - timeout_start > timeout_sec:
+            raise TimeoutError('WLAC0001 response timeout')
+        time.sleep(0.01)
+    
+    response = future.result()
+    
+    # 딕셔너리 변환
+    wlac_req_dict = convert_wlac_request_to_dict(wlac_request)
+    wlac_res_dict = convert_wlac_response_to_dict(response)
+    
+    # 결과 확인
+    if response.stored:
+        if logger:
+            logger.info('✅ Result sent to PLC')
+    else:
+        raise Exception(f'PLC rejected: {response.error}')
+    
+    return wlac_req_dict, wlac_res_dict

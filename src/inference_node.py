@@ -51,6 +51,7 @@ from data_logger import (
     convert_wlac_response_to_dict
 )
 from ftp_uploader import FTPUploader, create_ftp_uploader
+from protocol_parser import send_result_to_plc
 
 class InferenceNode2(Node):
     """
@@ -425,7 +426,8 @@ class InferenceNode2(Node):
             
             # 2. 센서 데이터 저장 (옵션)
             if self.get_parameter('save_data').value:
-                self._save_sensor_data(sensor_data_list, sequence_id)
+                self.data_logger.save_sensor_data(sensor_data_list, sequence_id)
+                self.get_logger().info(f'💾 Saved {len(sensor_data_list)} sensor frames')
             
             # 3. SAM2 초기화 (비디오 모드)
             self._initialize_sam2_with_prompt(sensor_data_list)
@@ -483,7 +485,9 @@ class InferenceNode2(Node):
             self.get_logger().info(f'💾 Measurement CSV saved')
             
             # 8. WLAC0001 전송 및 저장
-            wlac_request_dict, wlac_response_dict = self._send_result_to_plc(result, request)
+            wlac_request_dict, wlac_response_dict = send_result_to_plc(
+                self.wlac_client, result, request, self.get_logger()
+            )
             
             if wlac_request_dict and wlac_response_dict:
                 self.data_logger.save_wlac_response(
@@ -518,7 +522,7 @@ class InferenceNode2(Node):
                 error_result = {'result_code': '0030', 'len_p1_2': 0, 'len_p3_4': 0, 'width_p5_6': 0, 'width_p7_8': 0}
             
             try:
-                self._send_result_to_plc(error_result, request)
+                send_result_to_plc(self.wlac_client, error_result, request, self.get_logger())
             except Exception as e2:
                 self.get_logger().error(f'Failed to send error result: {e2}')
         
@@ -659,134 +663,6 @@ class InferenceNode2(Node):
             sensor_data_list.append(data)
         
         return sensor_data_list
-    
-    def _save_sensor_data(self, sensor_data_list: list, cr_op_indi_id: str):
-        """센서 데이터를 디스크에 저장"""
-        output_dir = self.get_parameter('output_dir').value
-        
-        if cr_op_indi_id:
-            base_dir = os.path.join(output_dir, cr_op_indi_id)
-        else:
-            base_dir = output_dir
-        
-        image_dir = os.path.join(base_dir, 'image')
-        pcd_dir = os.path.join(base_dir, 'pcd')
-        
-        os.makedirs(image_dir, exist_ok=True)
-        os.makedirs(pcd_dir, exist_ok=True)
-        
-        self.get_logger().info(f'💾 Saving sensor data to {base_dir}...')
-        
-        for idx, sensor_data in enumerate(sensor_data_list):
-            try:
-                if 'camera' in sensor_data and sensor_data['camera'] is not None:
-                    image_path = os.path.join(image_dir, f'{idx:04d}.jpg')
-                    bgr_image = cv2.cvtColor(sensor_data['camera'], cv2.COLOR_RGB2BGR)
-                    cv2.imwrite(image_path, bgr_image)
-                
-                if 'lidar' in sensor_data and sensor_data['lidar'] is not None:
-                    pcd_path = os.path.join(pcd_dir, f'{idx:04d}.pcd')
-                    self._save_pcd(sensor_data['lidar'], pcd_path)
-                    
-            except Exception as e:
-                self.get_logger().error(f'Failed to save frame {idx}: {e}')
-        
-        self.get_logger().info(f'✅ Saved {len(sensor_data_list)} frames')
-    
-    def _save_pcd(self, points: np.ndarray, filepath: str):
-        """포인트 클라우드를 PCD 파일로 저장"""
-        num_points = points.shape[0]
-        
-        with open(filepath, 'w') as f:
-            f.write('# .PCD v0.7 - Point Cloud Data file format\n')
-            f.write('VERSION 0.7\n')
-            f.write('FIELDS x y z\n')
-            f.write('SIZE 4 4 4\n')
-            f.write('TYPE F F F\n')
-            f.write('COUNT 1 1 1\n')
-            f.write(f'WIDTH {num_points}\n')
-            f.write('HEIGHT 1\n')
-            f.write('VIEWPOINT 0 0 0 1 0 0 0\n')
-            f.write(f'POINTS {num_points}\n')
-            f.write('DATA ascii\n')
-            
-            for point in points:
-                f.write(f'{point[0]:.6f} {point[1]:.6f} {point[2]:.6f}\n')
-    
-    # ==================== 결과 검증 및 전송 ====================
-    
-    def _validate_result(self, inference_result: dict, body: ACWL0001Body) -> dict:
-        """결과 검증"""
-        length = inference_result['length']
-        width = inference_result['width']
-        
-        result_code = '0000'
-        
-        # if abs(length) > 200 or abs(width) > 200:
-        #     result_code = '0030'
-        #     self.get_logger().warning(f'❌ Measurement error')
-        #     self.get_logger().warning(f'  Length: {length}mm')
-        #     self.get_logger().warning(f'  Width: {width}mm')
-        
-        return {
-            'result_code': result_code,
-            'length': length,
-            'width': width
-        }
-    
-    def _send_result_to_plc(self, result: dict, original_request: ACWL0001.Request) -> Tuple[Optional[dict], Optional[dict]]:
-        """
-        PLC로 결과 전송
-        
-        Returns:
-            (wlac_request_dict, wlac_response_dict) 튜플
-        """
-        wlac_request = WLAC0001.Request()
-        
-        wlac_request.head = HeadCR()
-        wlac_request.head.msg_id = 'WLAC0001'
-        wlac_request.head.date = time.strftime('%Y-%m-%d')
-        wlac_request.head.time = time.strftime('%H-%M-%S')
-        wlac_request.head.form = 'I'
-        wlac_request.head.msg_len = 60
-        wlac_request.head.filler = ''
-        
-        wlac_request.body = WLAC0001Body()
-        wlac_request.body.eqp_cd = original_request.body.eqp_cd
-        wlac_request.body.result_code = result['result_code']
-        wlac_request.body.len_result_p1_2 = result['len_p1_2']
-        wlac_request.body.len_result_p3_4 = result['len_p3_4']
-        wlac_request.body.width_result_p5_6 = result['width_p5_6']
-        wlac_request.body.width_result_p7_8 = result['width_p7_8']
-        
-        now = time.time()
-        wlac_request.body.stamp = Time()
-        wlac_request.body.stamp.sec = int(now)
-        wlac_request.body.stamp.nanosec = int((now % 1) * 1e9)
-        
-        if not self.wlac_client.wait_for_service(timeout_sec=5.0):
-            raise Exception('WLAC0001 service not available')
-        
-        future = self.wlac_client.call_async(wlac_request)
-        
-        timeout_start = time.time()
-        while not future.done():
-            if time.time() - timeout_start > 10.0:
-                raise TimeoutError('WLAC0001 response timeout')
-            time.sleep(0.01)
-        
-        response = future.result()
-        
-        # 딕셔너리 변환
-        wlac_req_dict = convert_wlac_request_to_dict(wlac_request)
-        wlac_res_dict = convert_wlac_response_to_dict(response)
-        
-        if response.stored:
-            self.get_logger().info('✅ Result sent to PLC')
-        else:
-            raise Exception(f'PLC rejected: {response.error}')
-        
-        return wlac_req_dict, wlac_res_dict
     
     # ==================== main.py 통합: 측정 파이프라인 ====================
     
@@ -937,44 +813,16 @@ class InferenceNode2(Node):
         
         # 11. 시각화 (옵션)
         if self.get_parameter('visualize').value:
-            self._save_visualizations(
+            self.data_logger.save_visualizations(
                 image, masks, magnet_mask, plate_mask,
                 magnet_corners_2d, plate_corners_2d,
-                measure_points_3d, measurements, frame_idx, sequence_id
+                measure_points_3d, measurements, 
+                self.camera_matrix, self.dist_coeffs,
+                frame_idx, sequence_id
             )
+            self.get_logger().info(f'   Saved visualizations for frame {frame_idx}')
         
         return measurements
-    
-    def _save_visualizations(self, image, masks, magnet_mask, plate_mask,
-                            magnet_corners_2d, plate_corners_2d,
-                            measure_points_3d, measurements, frame_idx, sequence_id: str = ''):
-        """4종 시각화 저장 (main.py 방식)"""
-        # DataLogger와 동일한 경로 사용
-        if sequence_id:
-            output_dir = Path(self.data_logger.output_dir) / sequence_id / "results"
-        else:
-            output_dir = Path(self.data_logger.output_dir)
-        output_dir.mkdir(exist_ok=True, parents=True)
-        
-        frame_id = f"frame_{frame_idx:04d}"
-        
-        # 1. SAM2 segmentation 결과
-        sam2_visualizer(image.copy(), masks, frame_id, output_dir)
-        
-        # 2. Mask 정제 결과
-        mask_visualizer(image.copy(), [magnet_mask, plate_mask], frame_id, output_dir)
-        
-        # 3. Box 결과
-        box_visualizer(image.copy(), [magnet_corners_2d, plate_corners_2d], frame_id, output_dir)
-        
-        # 4. 측정 결과
-        measurement_visualizer(
-            image.copy(), [magnet_corners_2d, plate_corners_2d],
-            measure_points_3d, self.camera_matrix, self.dist_coeffs,
-            measurements, frame_id, output_dir
-        )
-        
-        self.get_logger().info(f'   Saved visualizations for frame {frame_idx}')
 
 
 def main(args=None):
