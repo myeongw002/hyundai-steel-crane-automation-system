@@ -40,10 +40,7 @@ from utils import (
     mask_to_box, unproject_to_plane, DistanceCalculator,
     points_to_depth_map, depth_map_to_points
 )
-from visualizer import (
-    sam2_visualizer, mask_visualizer,
-    box_visualizer, measurement_visualizer
-)
+
 from data_logger import (
     DataLogger,
     convert_ros_request_to_dict,
