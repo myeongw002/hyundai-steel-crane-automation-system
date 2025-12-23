@@ -37,7 +37,8 @@ from sam2_wrapper import SAM2Wrapper
 from utils import (
     crop_fov, refine_mask, filter_points_in_mask,
     estimate_plane_ransac, refine_mask_with_plane,
-    mask_to_box, unproject_to_plane, DistanceCalculator
+    mask_to_box, unproject_to_plane, DistanceCalculator,
+    points_to_depth_map, depth_map_to_points
 )
 from visualizer import (
     sam2_visualizer, mask_visualizer,
@@ -181,18 +182,20 @@ class InferenceNode2(Node):
         
         # main.py 통합 파라미터
         self.declare_parameter('one_shot_image', '')  # One-shot 이미지 경로
-        self.declare_parameter('morph_kernel_size', 40)  # Morphology kernel 크기
+        self.declare_parameter('morph_plate_kernel_size', 40)  # Morphology plate kernel 크기
+        self.declare_parameter('morph_magnet_kernel_size', 50)  # Morphology magnet kernel 크기
         self.declare_parameter('measurement_offset_px', 700)  # 측정 위치 offset (픽셀)
-        self.declare_parameter('measurement_offset_p1_p2', 19.4)  # 위쪽 길이 offset (mm)
-        self.declare_parameter('measurement_offset_p3_p4', 19.4)  # 아래쪽 길이 offset (mm)
-        self.declare_parameter('measurement_offset_p5_p6', 32.4)  # 위쪽 너비 offset (mm)
-        self.declare_parameter('measurement_offset_p7_p8', 32.4)  # 아래쪽 너비 offset (mm)
-        self.declare_parameter('lidar_dense', False)  # Dense LiDAR 모드
+        self.declare_parameter('measurement_offset_p1_p2', 50.)  # 위쪽 길이 offset (mm)
+        self.declare_parameter('measurement_offset_p3_p4', 46.)  # 아래쪽 길이 offset (mm)
+        self.declare_parameter('measurement_offset_p5_p6', 27.)  # 위쪽 너비 offset (mm)
+        self.declare_parameter('measurement_offset_p7_p8', 20.)  # 아래쪽 너비 offset (mm)
         self.declare_parameter('enable_fov_crop', True)  # FOV Crop 활성화
         self.declare_parameter('fov_degrees', 120)  # FOV 각도
-        self.declare_parameter('enable_plane_refinement', True)  # 평면 기반 정제
-        self.declare_parameter('plane_ransac_iterations', 100)  # RANSAC 반복 횟수
-        self.declare_parameter('plane_threshold', 0.05)  # 평면 threshold (m)
+        self.declare_parameter('lidar_vertical', 128)  # lidar vertical 해상도
+        self.declare_parameter('lidar_horizontal', 512)  # lidar horizontal 해상도
+        self.declare_parameter('lidar_upsample_scale', 3)  # upsampling scale
+        self.declare_parameter('plane_ransac_iterations', 700)  # RANSAC 반복 횟수
+        self.declare_parameter('plane_threshold', 0.003)  # 평면 threshold (m)
         
         # 센서 토픽
         self.declare_parameter('camera_topic', '/camera/image_raw/compressed')
@@ -842,13 +845,25 @@ class InferenceNode2(Node):
         image = sensor_data['camera']
         points_lidar = sensor_data['lidar']
         H, W = image.shape[:2]
+        lidar_vertical = self.get_parameter('lidar_vertical').value
+        lidar_horizontal = self.get_parameter('lidar_horizontal').value
         
         # 1. FOV Crop (옵션)
         if self.get_parameter('enable_fov_crop').value:
+            fov_degrees = self.get_parameter('fov_degrees').value
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(points_lidar)
-            pcd = crop_fov(pcd, self.get_parameter('fov_degrees').value)
-            points_lidar = np.asarray(pcd.points)
+            pcd = crop_fov(pcd, fov_degrees)
+            
+            
+            lidar_horizontal = int(np.ceil(lidar_horizontal / (360/fov_degrees)))
+        
+        lidar_upsample_scale = self.get_parameter('lidar_upsample_scale').value
+        depth_map = points_to_depth_map(pcd, H=lidar_vertical, W=lidar_horizontal)
+        depth_map = cv2.resize(depth_map, (lidar_horizontal*lidar_upsample_scale, lidar_vertical*lidar_upsample_scale), interpolation=cv2.INTER_NEAREST)
+        pcd = depth_map_to_points(depth_map)
+        
+        points_lidar = np.asarray(pcd.points)
         
         # 2. Mask 가져오기
         masks = self.video_masks.get(frame_idx)
@@ -856,10 +871,12 @@ class InferenceNode2(Node):
             raise ValueError(f"No mask for frame {frame_idx}")
         
         # 3. Mask 정제 (morphology)
-        kernel_size = self.get_parameter('morph_kernel_size').value
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
-        magnet_mask = refine_mask(masks.get(1), kernel)
-        plate_mask = refine_mask(masks.get(2), kernel)
+        magnet_kernel_size = self.get_parameter('morph_magnet_kernel_size').value
+        plate_kernel_size = self.get_parameter('morph_plate_kernel_size').value
+        magnet_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (magnet_kernel_size, magnet_kernel_size))
+        plate_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (plate_kernel_size, plate_kernel_size))
+        magnet_mask = refine_mask(masks.get(1), magnet_kernel)
+        plate_mask = refine_mask(masks.get(2), plate_kernel)
         
         # 4. Plate 영역 포인트 추출
         plate_points, plate_points_cam, plate_indices = filter_points_in_mask(
@@ -879,31 +896,12 @@ class InferenceNode2(Node):
         if plane_normal is None:
             raise ValueError("Plane estimation failed")
         
-        # 6. 평면 기반 마스크 정제 (옵션)
-        if self.get_parameter('enable_plane_refinement').value:
-            plate_mask, _ = refine_mask_with_plane(
-                points_lidar, plate_mask, plate_indices,
-                plane_normal, plane_d, self.T_lidar_to_cam, self.camera_matrix,
-                threshold=self.get_parameter('plane_threshold').value
-            )
-        
-        # 7. SAM2 image_run (LIDAR_DENSE=False 모드)
-        if not self.get_parameter('lidar_dense').value:
-            plate_corners_2d = mask_to_box(plate_mask, rotate=False, inscribed=False)
-            
-            # 외곽 음수 포인트 생성
-            x_coords = np.arange(100, W - 100, 200)
-            outlier_points = np.vstack([
-                np.column_stack([x_coords, np.full_like(x_coords, 100)]),
-                np.column_stack([x_coords, np.full_like(x_coords, H - 100)])
-            ])
-            
-            plate_mask = self.sam2_wrapper.image_run(
-                cv2.cvtColor(image, cv2.COLOR_RGB2BGR),
-                plate_corners_2d,
-                outlier_points
-            )
-            plate_mask = refine_mask(plate_mask, kernel)
+        # 6. 평면 기반 마스크 정제
+        plate_mask, _ = refine_mask_with_plane(
+            points_lidar, plate_mask, plate_indices,
+            plane_normal, plane_d, self.T_lidar_to_cam, self.camera_matrix,
+            threshold=0.05
+        )
         
         # 8. Mask → Box 변환
         plate_corners_2d = mask_to_box(plate_mask, rotate=True, inscribed=False)

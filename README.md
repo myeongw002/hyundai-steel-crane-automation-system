@@ -401,17 +401,3 @@ hyundai-steel-crane-automation-system/
 ├── requirements.txt
 └── README.md
 ```
-
-## 📚 참고 자료
-- [ROS2 Documentation](https://docs.ros.org/en/humble/)
-- [SAM2 Repository](https://github.com/facebookresearch/segment-anything-2)
-- [Open3D Documentation](http://www.open3d.org/docs/)
-
-## 📄 라이선스
-TODO: License declaration
-
-## 👥 유지보수
-- **Maintainer**: antlab
-- **Email**: antlab@todo.todo
-- **Version**: 0.0.0
-- **Last Updated**: 2025-12-19
