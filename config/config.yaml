@@ -66,7 +66,7 @@
     ftp_remote_dir: 'upload/4'
 
     # ==================== main.py 통합 파라미터 ====================
-    one_shot_image: '/home/antlab/ROS2/crane_ws/src/hyundai-steel-crane-automation-system/oneshot'
+    one_shot_image: '/home/antlab/ROS2/crane_ws/src/hyundai-steel-crane-automation-system/oneshot/0000.jpg'
     morph_plate_kernel_size: 40
     morph_magnet_kernel_size: 50
     measurement_offset_px: 700
