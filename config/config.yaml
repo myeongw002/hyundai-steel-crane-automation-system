@@ -19,9 +19,9 @@
 /inference_node:
   ros__parameters:
     # ==================== SAM2 설정 ====================
-    sam2_root: '/home/antlab/ROS2/ros2_ws/src/hyundai_crane_automation/src/sam2'
+    sam2_root: '/home/antlab/ROS2/crane_ws/src/hyundai-steel-crane-automation-system/src/sam2'
     sam2_config: 'configs/sam2.1/sam2.1_hiera_l.yaml'
-    sam2_checkpoint: '/home/antlab/ROS2/ros2_ws/src/hyundai_crane_automation/src/sam2/sam2.1_hiera_large.pt'
+    sam2_checkpoint: '/home/antlab/ROS2/crane_ws/src/hyundai-steel-crane-automation-system/src/sam2/sam2.1_hiera_large.pt'
     
     # ==================== 카메라 캘리브레이션 ====================
     # Camera matrix (3x3) - row-major: [fx, s, cx, 0, fy, cy, 0, 0, 1]
@@ -66,7 +66,7 @@
     ftp_remote_dir: 'upload/4'
 
     # ==================== main.py 통합 파라미터 ====================
-    one_shot_image: '/home/antlab/ROS2/crane_ws/src/hyundai_crane_automation/oneshot'
+    one_shot_image: '/home/antlab/ROS2/crane_ws/src/hyundai-steel-crane-automation-system/oneshot'
     morph_plate_kernel_size: 40
     morph_magnet_kernel_size: 50
     measurement_offset_px: 700
