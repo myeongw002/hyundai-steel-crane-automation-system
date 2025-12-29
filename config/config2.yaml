@@ -19,9 +19,9 @@
 /inference_node:
   ros__parameters:
     # ==================== SAM2 설정 ====================
-    sam2_root: '/home/antlab/ROS2/ros2_ws/src/hyundai-steel-crane-automation-system/src/sam2'
+    sam2_root: '/home/antlab/ROS2/crane_ws/src/hyundai-steel-crane-automation-system/src/sam2'
     sam2_config: 'configs/sam2.1/sam2.1_hiera_l.yaml'
-    sam2_checkpoint: '/home/antlab/ROS2/ros2_ws/src/hyundai-steel-crane-automation-system/src/sam2/sam2.1_hiera_large.pt'
+    sam2_checkpoint: '/home/antlab/ROS2/crane_ws/src/hyundai-steel-crane-automation-system/src/sam2/sam2.1_hiera_large.pt'
     
     # ==================== 카메라 캘리브레이션 ====================
     # Camera matrix (3x3) - row-major: [fx, s, cx, 0, fy, cy, 0, 0, 1]
@@ -83,9 +83,9 @@
     plane_threshold: 0.003
     
     # ==================== 센서 토픽 ====================
-    camera_topic: '/camera/image_raw/compressed'
-    lidar_topic: '/lidar/points'
-    sensor_buffer_size: 10
+    camera_topic: '/flir_camera/image_colored/compressed'
+    lidar_topic: '/ouster/points'
+    sensor_buffer_size: 3
     sensor_timeout: 5.0
     
     # ==================== 센서 동기화 ====================
