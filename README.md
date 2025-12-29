@@ -383,17 +383,27 @@ hyundai-steel-crane-automation-system/
 ├── srv/                    # 서비스 정의
 │   ├── ACWL0001.srv
 │   └── WLAC0001.srv
-├── src/                    # 소스 코드
+├── src/                    # ROS2 노드 및 통신
 │   ├── socket_node.py      # PLC 통신 노드
 │   ├── inference_node.py   # 측정 노드
+│   ├── acwl_client.py      # ACWL0001 테스트 클라이언트
+│   ├── wlac_server.py      # WLAC0001 Mock WCS 서버
+│   ├── wlac_client.py      # WLAC0001 테스트 클라이언트
 │   ├── protocol_parser.py  # 프로토콜 파서
+│   ├── data_logger.py      # 로거
+│   └── ftp_uploader.py     # FTP 업로더
+├── modules/                # 핵심 처리 모듈
+│   ├── main.py             # 메인 처리 로직
+│   ├── data_loader.py      # 데이터 로더
 │   ├── sam2_wrapper.py     # SAM2 래퍼
 │   ├── utils.py            # 유틸리티
 │   ├── visualizer.py       # 시각화
-│   ├── data_logger.py      # 로거
-│   ├── ftp_uploader.py     # FTP 업로더
 │   └── sam2/               # SAM2 모델
 ├── params/                 # 파라미터 파일
+│   ├── intrinsic.csv       # 카메라 내부 파라미터
+│   ├── intrinsic2.csv
+│   ├── transform.txt       # LiDAR-Camera 변환 행렬
+│   └── transform2.txt
 ├── docs/                   # 문서
 ├── oneshot/                # 일회성 스크립트
 ├── CMakeLists.txt
