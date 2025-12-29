@@ -85,9 +85,9 @@
     # ==================== 센서 토픽 ====================
     camera_topic: '/flir_camera/image_colored/compressed'
     lidar_topic: '/ouster/points'
-    sensor_buffer_size: 3
+    sensor_buffer_size: 2
     sensor_timeout: 5.0
     
     # ==================== 센서 동기화 ====================
-    sync_queue_size: 10
-    sync_slop: 0.1
+    sync_queue_size: 5
+    sync_slop: 0.05
