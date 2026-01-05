@@ -5,6 +5,8 @@ Provides functionality to upload result files to remote SFTP server
 
 import os
 import paramiko
+import time
+import posixpath
 from typing import List, Optional
 import logging
 
@@ -30,102 +32,98 @@ class FTPUploader:
         self.remote_base_dir = remote_base_dir
         self.port = port
         self.logger = logging.getLogger(__name__)
+
+    def _mkdir_p(self, sftp: paramiko.SFTPClient, remote_dir: str):
+        """remote_dir을 / 기준으로 부모부터 재귀 생성 (상대/절대 모두 처리)"""
+        remote_dir = remote_dir.strip('/')
+        if not remote_dir:
+            return
+        parts = remote_dir.split('/')
+        cur = ''
+        for p in parts:
+            cur = p if cur == '' else f"{cur}/{p}"
+            try:
+                sftp.stat(cur)
+            except FileNotFoundError:
+                sftp.mkdir(cur)
+
+    def _verify_size_with_retry(self, sftp: paramiko.SFTPClient, remote_path: str,
+                                expected_size: int, retries: int = 10, sleep_sec: float = 0.2) -> bool:
+        """일부 서버의 stat 반영 지연 대비: 짧게 여러 번 확인"""
+        for _ in range(retries):
+            try:
+                sz = sftp.stat(remote_path).st_size
+                if sz == expected_size:
+                    return True
+            except FileNotFoundError:
+                pass
+            time.sleep(sleep_sec)
+        return False
+
+    def _put_file_strict(self, sftp: paramiko.SFTPClient, local_path: str, remote_path: str):
+        """업로드 + (필요시) 지연 고려한 크기 검증"""
+        local_size = os.path.getsize(local_path)
+
+        # 1) 전송 (confirm=False로 Paramiko 내부 즉시-stat 검증을 피함)
+        sftp.put(local_path, remote_path, confirm=False)
+
+        # 2) 크기 검증(재시도)
+        ok = self._verify_size_with_retry(sftp, remote_path, local_size)
+        if not ok:
+            # 실패 시 0바이트 찌꺼기 제거 시도
+            try:
+                sftp.remove(remote_path)
+            except Exception:
+                pass
+            raise IOError(f"size mismatch after upload: expected={local_size}, remote!=expected")
     
     def upload_results(self, local_base_dir: str, sequence_id: str) -> dict:
-        """
-        결과 파일들을 SFTP 서버로 업로드
-        
-        Args:
-            local_base_dir: 로컬 기본 디렉토리 경로
-            sequence_id: 시퀀스 ID (스케줄ID)
-        
-        Returns:
-            업로드 결과 딕셔너리 {'success': bool, 'uploaded_files': list, 'errors': list}
-        """
-        result = {
-            'success': False,
-            'uploaded_files': [],
-            'errors': []
-        }
-        
-        # 로컬 results 디렉토리 경로
+        result = {'success': False, 'uploaded_files': [], 'errors': []}
         local_results_dir = os.path.join(local_base_dir, sequence_id, 'results')
-        
-        if not os.path.exists(local_results_dir):
-            error_msg = f'Local results directory not found: {local_results_dir}'
-            self.logger.error(error_msg)
-            result['errors'].append(error_msg)
+        if not os.path.isdir(local_results_dir):
+            result['errors'].append(f'Local results directory not found: {local_results_dir}')
             return result
-        
-        # SFTP 연결
-        ssh_client = None
+
+        ssh = None
         sftp = None
         try:
-            # SSH 클라이언트 생성
-            ssh_client = paramiko.SSHClient()
-            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            # 연결
-            ssh_client.connect(
-                hostname=self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
-                timeout=10
-            )
-            sftp = ssh_client.open_sftp()
-            self.logger.info(f'✅ Connected to SFTP server: {self.host}:{self.port}')
-            
-            # 원격 기본 디렉토리로 이동
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(self.host, port=self.port, username=self.username,
+                        password=self.password, timeout=10)
+            sftp = ssh.open_sftp()
+
+            # base dir로 이동/생성
             try:
                 sftp.chdir(self.remote_base_dir)
             except IOError:
-                # 디렉토리가 없으면 생성
-                sftp.mkdir(self.remote_base_dir)
+                self._mkdir_p(sftp, self.remote_base_dir)
                 sftp.chdir(self.remote_base_dir)
+
+            # frame_0001_result.png 파일을 스케줄ID.png로 업로드
+            target_file = 'frame_0001_result.png'
+            lp = os.path.join(local_results_dir, target_file)
             
-            # 원격 시퀀스ID/results 디렉토리 생성
-            remote_seq_dir = sequence_id
-            remote_results_dir = f'{sequence_id}/results'
-            
-            self._ensure_remote_directory(sftp, remote_seq_dir)
-            self._ensure_remote_directory(sftp, remote_results_dir)
-            
-            # results 디렉토리 아래 모든 파일 업로드
-            uploaded_count = self._upload_directory_recursive(
-                sftp, local_results_dir, remote_results_dir, result
-            )
-            
-            if uploaded_count > 0:
-                result['success'] = True
-                self.logger.info(f'✅ Successfully uploaded {uploaded_count} files')
+            if os.path.isfile(lp):
+                # 원격 파일명을 스케줄ID.png로 설정
+                remote_filename = f'{sequence_id}.png'
+                try:
+                    self._put_file_strict(sftp, lp, remote_filename)
+                    result['uploaded_files'].append(remote_filename)
+                    result['success'] = True
+                except Exception as e:
+                    result['errors'].append(f'Failed to upload {lp}: {e}')
             else:
-                result['errors'].append('No files were uploaded')
-            
-        except paramiko.AuthenticationException as e:
-            error_msg = f'SFTP authentication failed: {str(e)}'
-            self.logger.error(error_msg)
-            result['errors'].append(error_msg)
-        except paramiko.SSHException as e:
-            error_msg = f'SFTP SSH error: {str(e)}'
-            self.logger.error(error_msg)
-            result['errors'].append(error_msg)
+                result['errors'].append(f'{target_file} not found in {local_results_dir}')
+
         except Exception as e:
-            error_msg = f'SFTP unexpected error: {str(e)}'
-            self.logger.error(error_msg)
-            result['errors'].append(error_msg)
+            result['errors'].append(f'SFTP unexpected error: {e}')
         finally:
-            if sftp:
-                try:
-                    sftp.close()
-                except:
-                    pass
-            if ssh_client:
-                try:
-                    ssh_client.close()
-                except:
-                    pass
-        
+            try:
+                if sftp: sftp.close()
+            finally:
+                if ssh: ssh.close()
+
         return result
     
     def _ensure_remote_directory(self, sftp: paramiko.SFTPClient, remote_dir: str):
